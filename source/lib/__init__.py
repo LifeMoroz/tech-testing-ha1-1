@@ -19,23 +19,29 @@ OK_URL = re.compile(r'http(?:s)?://(www\.)?odnoklassniki\.ru/', re.I)
 MM_URL = re.compile(r'http(?:s)?://my\.mail\.ru/apps/', re.I)
 
 COUNTER_TYPES = (
-    ('GOOGLE_ANALYTICS', re.compile(r'.*google-analytics\.com/ga\.js.*', re.I+re.S)),
-    ('YA_METRICA', re.compile(r'.*mc\.yandex\.ru/metrika/watch\.js.*', re.I+re.S)),
-    ('TOP_MAIL_RU', re.compile(r'.*top-fwz1\.mail\.ru/counter.*', re.I+re.S)),
-    ('TOP_MAIL_RU', re.compile(r'.*top\.mail\.ru/jump\?from.*', re.I+re.S)),
-    ('DOUBLECLICK', re.compile(r'.*//googleads\.g\.doubleclick\.net/pagead/viewthroughconversion.*', re.I+re.S)),
-    ('VISUALDNA', re.compile(r'.*//a1\.vdna-assets\.com/analytics\.js.*', re.I+re.S)),
-    ('LI_RU', re.compile(r'.*/counter\.yadro\.ru/hit.*', re.I+re.S)),
-    ('RAMBLER_TOP100', re.compile(r'.*counter\.rambler\.ru/top100.*', re.I+re.S))
+    ('GOOGLE_ANALYTICS', re.compile(r'.*google-analytics\.com/ga\.js.*', re.I + re.S)),
+    ('YA_METRICA', re.compile(r'.*mc\.yandex\.ru/metrika/watch\.js.*', re.I + re.S)),
+    ('TOP_MAIL_RU', re.compile(r'.*top-fwz1\.mail\.ru/counter.*', re.I + re.S)),
+    ('TOP_MAIL_RU', re.compile(r'.*top\.mail\.ru/jump\?from.*', re.I + re.S)),
+    ('DOUBLECLICK', re.compile(r'.*//googleads\.g\.doubleclick\.net/pagead/viewthroughconversion.*', re.I + re.S)),
+    ('VISUALDNA', re.compile(r'.*//a1\.vdna-assets\.com/analytics\.js.*', re.I + re.S)),
+    ('LI_RU', re.compile(r'.*/counter\.yadro\.ru/hit.*', re.I + re.S)),
+    ('RAMBLER_TOP100', re.compile(r'.*counter\.rambler\.ru/top100.*', re.I + re.S))
 )
 
 
 def to_unicode(val, errors='strict'):
-    return val if isinstance(val, unicode) else val.decode('utf8', errors=errors)
+    if isinstance(val, unicode):
+        return val
+    else:
+        return val.decode('utf8', errors=errors)
 
 
 def to_str(val, errors='strict'):
-    return val.encode('utf8', errors=errors) if isinstance(val, unicode) else val
+    if isinstance(val, unicode):
+        return val.encode('utf8', errors=errors)
+    else:
+        return val
 
 
 def get_counters(content):
@@ -69,9 +75,12 @@ def check_for_meta(content, url):
                     return urljoin(url, to_unicode(meta_url, 'ignore'))
 
 
+PREFIX_GOOGLE_MARKET = 'http://play.google.com/store/apps/'
+
+
 def fix_market_url(url):
     """Преобразует market:// урлы в http://"""
-    return 'http://play.google.com/store/apps/' + url.lstrip("market://")
+    return PREFIX_GOOGLE_MARKET + url.lstrip("market://")
 
 
 def make_pycurl_request(url, timeout, useragent=None):
@@ -99,6 +108,11 @@ def make_pycurl_request(url, timeout, useragent=None):
     return content, redirect_url
 
 
+ERROR_REDIRECT = 'ERROR'
+
+MARKET_SCHEME = 'market'
+
+
 def get_url(url, timeout, user_agent=None):
     """
     :return: урл, тип редиректа, содержимое страницы (если есть)
@@ -108,24 +122,22 @@ def get_url(url, timeout, user_agent=None):
         content, new_redirect_url = make_pycurl_request(url, timeout, user_agent)
     except (pycurl.error, ValueError) as e:
         logger.error(u'error in url {} {}'.format(url, e))
-        return url, 'ERROR', content  # TODO add exception in ERROR
+        return url, ERROR_REDIRECT, content  # TODO add exception in ERROR
 
     redirect_type = None
 
     # ignoring ok login redirects
-    if new_redirect_url and OK_REDIRECT.match(new_redirect_url):
-        return None, redirect_type, content
-
     if new_redirect_url:
+        if OK_REDIRECT.match(new_redirect_url):
+            return None, redirect_type, content
         redirect_type = REDIRECT_HTTP
     else:
         new_redirect_url = check_for_meta(content, url)
         if new_redirect_url:
             redirect_type = REDIRECT_META
 
-    if new_redirect_url and urlsplit(new_redirect_url).scheme == 'market':
+    if new_redirect_url and urlsplit(new_redirect_url).scheme == MARKET_SCHEME:
         new_redirect_url = fix_market_url(new_redirect_url)
-
     return prepare_url(new_redirect_url), redirect_type, content
 
 
@@ -169,7 +181,7 @@ def get_redirect_history(url, timeout, max_redirects=30, user_agent=None):
         history_types.append(redirect_type)
         history_urls.append(redirect_url)
 
-        if redirect_type == 'ERROR':
+        if redirect_type == ERROR_REDIRECT:
             break
 
         if len(history_urls) > max_redirects or (redirect_url in history_urls[:-1]):
@@ -191,7 +203,7 @@ def prepare_url(url):
     try:
         netloc = netloc.encode('idna')
     except UnicodeError:
-        pass
+        logger.error("encode exception")
     path = quote(to_str(path, 'ignore'), safe='/%+$!*\'(),')
     qs = quote_plus(to_str(qs, 'ignore'), safe=':&%=+$!*\'(),')
     return urlunparse((scheme, netloc, path, qs, anchor, fragments))

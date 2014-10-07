@@ -12,10 +12,11 @@ from source.lib import to_unicode, get_counters, fix_market_url, PREFIX_GOOGLE_M
     ERROR_REDIRECT, make_pycurl_request, to_str, check_for_meta
 
 
-class InitTestCase(unittest.TestCase):
+class TestInit(unittest.TestCase):
     def setUp(self):
         self.small_timeout = 1
         self.normal_timeout = 10
+        self.big_timeout = 60
 
     def tearDown(self):
         pass
@@ -133,7 +134,7 @@ class InitTestCase(unittest.TestCase):
              mock.patch('source.lib.to_unicode', mock.Mock(return_value=redirect_url)), \
              mock.patch('source.lib.StringIO', mock.Mock(return_value=string_io_mock)). \
                  mock.patch('pycurl.Curl', mock.Mock(return_value=curl_mock)):
-            return make_pycurl_request(url, 60, useragent)
+            return make_pycurl_request(url, self.big_timeout, useragent)
 
     @mock.patch('source.lib.prepare_url', mock.Mock())
     def test_make_pycurl_request(self):

@@ -9,6 +9,9 @@ from utils import get_tube
 
 logger = getLogger('redirect_checker')
 
+history_type_error = "ERROR"
+task_data_suspicious = 'suspicious'
+
 
 def get_redirect_history_from_task(task, timeout, max_redirects=30, user_agent=None):
     url = to_unicode(task.data['url'], 'ignore')
@@ -21,7 +24,7 @@ def get_redirect_history_from_task(task, timeout, max_redirects=30, user_agent=N
     history_types, history_urls, counters = get_redirect_history(
         url, timeout, max_redirects, user_agent
     )
-    if 'ERROR' in history_types and not is_recheck:
+    if history_type_error in history_types and not is_recheck:
         task.data['recheck'] = True
         data = task.data
         is_input = True
