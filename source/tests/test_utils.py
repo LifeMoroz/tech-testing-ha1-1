@@ -125,7 +125,6 @@ class LoadConfigFromPyfileTestCase(unittest.TestCase):
         Test correct work with bad config
         """
         import os
-        import os
 
         variables = {
             'QUEUE_PORT': '',

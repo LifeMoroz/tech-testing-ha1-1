@@ -17,6 +17,7 @@ from gevent.monkey import patch_all
 from gevent.pool import Pool
 import requests
 import tarantool
+import tarantool_queue
 
 from source.lib.utils import parse_cmd_args, daemonize, create_pidfile, load_config_from_pyfile, get_tube
 
