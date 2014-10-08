@@ -10,7 +10,7 @@ from tarantool_queue import tarantool_queue
 def execfile_wrapper(filepath):
     variables = {}
     execfile(filepath, variables)
-    return  variables
+    return variables
 
 def try_fork():
     try:

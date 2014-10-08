@@ -126,21 +126,20 @@ class TestInit(unittest.TestCase):
 
 # make_pycurl_request не проверяет аргументы на None, или если url не string, то все красиво упадет ^^
     def _make_pycurl_request(self, redirect_url, test_resp, url='example.net',
-                             useragent=None, curl_mock=mock.MagicMock(), string_io_mock=mock.MagicMock()):
-        string_io_mock.getvalue = mock.Mock(return_value=test_resp)
+                             useragent=None, curl_mock=mock.MagicMock()):
+        string_io_mock = mock.Mock(return_value=test_resp)
         curl_mock.getinfo = mock.Mock(return_value=redirect_url)
         curl_mock.setopt = mock.Mock()
         with mock.patch('source.lib.to_str', mock.Mock(return_value=url)), \
-             mock.patch('source.lib.to_unicode', mock.Mock(return_value=redirect_url)), \
-             mock.patch('source.lib.StringIO', mock.Mock(return_value=string_io_mock)). \
-                 mock.patch('pycurl.Curl', mock.Mock(return_value=curl_mock)):
+                mock.patch('source.lib.to_unicode', mock.Mock(return_value=redirect_url)), \
+                mock.patch('StringIO.StringIO.getvalue', string_io_mock), \
+                mock.patch('pycurl.Curl', mock.Mock(return_value=curl_mock)):
             return make_pycurl_request(url, self.big_timeout, useragent)
 
     @mock.patch('source.lib.prepare_url', mock.Mock())
     def test_make_pycurl_request(self):
         """
         Сделать обычный запрос
-        :return:
         """
         test_resp = 'response from example.net'
         redirect_url = 'http://another_url.org'
@@ -177,14 +176,14 @@ class TestInit(unittest.TestCase):
         self.assertEqual(redirect, redirect_url, 'Wrong redirect url')
 
 #Аналогично make_pycurl_request
-    @mock.patch('source.lib.make_pycurl_request', mock.Mock(side_effect=ValueError('value error')))
     def test_get_url_error_redirect(self):
         """
         get_url возвращает тип редиректа ERROR
         :return:
         """
         url = "url"
-        self.assertEquals(get_url(url, timeout=self.normal_timeout), (url, ERROR_REDIRECT, None))
+        with mock.patch('source.lib.make_pycurl_request', mock.Mock(side_effect=ValueError('value error'))):
+            self.assertEquals(get_url(url, timeout=self.normal_timeout), (url, ERROR_REDIRECT, None))
 
     def test_get_url_ok_redirect(self):
         """

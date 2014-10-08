@@ -73,7 +73,7 @@ class CreatePidFileTestCase(unittest.TestCase):
         pass
 
     def _create_pidfile(self, m_open, m_getpid):
-        with patch('lib.utils.open', m_open, create=True) as mock_open, patch('os.getpid', m_getpid):
+        with patch('__builtin__.open', m_open, create=True) as mock_open, patch('os.getpid', m_getpid):
             utils.create_pidfile('/file/path')
         return mock_open
 
@@ -113,7 +113,7 @@ class LoadConfigFromPyfileTestCase(unittest.TestCase):
             'QUEUE_PORT': '33013',
             'QUEUE_SPACE': '0'
         }
-        with patch('lib.utils.exec_pyfile', Mock(return_value=variables)):
+        with patch('source.lib.utils.execfile_wrapper', Mock(return_value=variables)):
             var = utils.load_config_from_pyfile(os.path.realpath(os.path.expanduser("source/tests/config/ok.py")))
 
         real_config = utils.Config()
@@ -131,7 +131,7 @@ class LoadConfigFromPyfileTestCase(unittest.TestCase):
             'QUEUE_PORT': '',
             'Wrong_attribute': '0'
         }
-        with patch('lib.utils.exec_pyfile', Mock(return_value=variables)):
+        with patch('source.lib.utils.execfile_wrapper', Mock(return_value=variables)):
             returns = utils.load_config_from_pyfile(
                 os.path.realpath(os.path.expanduser('source/tests/test_config_bad')))
         with self.assertRaises(AttributeError):
@@ -151,7 +151,7 @@ class SpawnWorkersTestCase(unittest.TestCase):
         """
         args = []
         num = 10
-        with patch('lib.utils.Process', Mock()) as mock_process:
+        with patch('multiprocessing.process.Process.start', mock.MagicMock()) as mock_process:
             utils.spawn_workers(num, "target", args, num)
             self.assertTrue(mock_process.called)
             self.assertEqual(mock_process.call_count, num)
@@ -162,7 +162,7 @@ class SpawnWorkersTestCase(unittest.TestCase):
         """
         args = []
         num = 0
-        with patch('lib.utils.Process', Mock()) as mock_process:
+        with patch('multiprocessing.Process', Mock()) as mock_process:
             utils.spawn_workers(num, "target", args, num)
             self.assertFalse(mock_process.called)
 
@@ -181,7 +181,7 @@ class ForOneTestTestCase(unittest.TestCase):
         app_description = "this is description"
         parameters = ['-d', '--config', '-P', app_description]
         parser = Mock()
-        with patch('lib.utils.argparse.ArgumentParser', Mock(return_value=parser)):
+        with patch('argparse.ArgumentParser', Mock(return_value=parser)):
             utils.parse_cmd_args(parameters)
             parser.parse_args.assert_called_once_with(args=parameters)
 

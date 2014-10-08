@@ -7,7 +7,7 @@ class NotificationPusherTestCase(unittest.TestCase):
     def test_create_pidfile_example(self):
         pid = 42
         m_open = mock.mock_open()
-        with mock.patch('notification_pusher.open', m_open, create=True):
+        with mock.patch('__builtin__.open', m_open, create=True):
             with mock.patch('os.getpid', mock.Mock(return_value=pid)):
                 create_pidfile('/file/path')
 

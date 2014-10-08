@@ -7,14 +7,10 @@ import unittest
 source_dir = os.path.join(os.path.dirname(__file__), 'source')
 sys.path.insert(0, source_dir)
 
-from tests.test_notification_pusher import NotificationPusherTestCase
-from tests.test_redirect_checker import RedirectCheckerTestCase
-
+loader = unittest.TestLoader()
+testdir = os.path.abspath(os.path.dirname(__file__)) + '/source/tests/'
+suite = loader.discover(testdir, pattern='*.py')
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite((
-        unittest.makeSuite(NotificationPusherTestCase),
-        unittest.makeSuite(RedirectCheckerTestCase),
-    ))
-    result = unittest.TextTestRunner().run(suite)
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
     sys.exit(not result.wasSuccessful())
