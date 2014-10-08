@@ -25,7 +25,7 @@ from source.lib.utils import parse_cmd_args, daemonize, create_pidfile, load_con
 SIGNAL_EXIT_CODE_OFFSET = 128
 """Коды выхода рассчитываются как 128 + номер сигнала"""
 
-run_application = True
+run = True
 """Флаг, определяющий, должно ли приложение продолжать работу."""
 
 exit_code = 0
@@ -102,14 +102,14 @@ def stop_handler(signum):
     :param signum: номер сигнала
     :type signum: int
     """
-    global run_application
+    global run
     global exit_code
 
     current_thread().name = 'pusher.signal'
 
     logger.info('Got signal #{signum}.'.format(signum=signum))
 
-    run_application = False
+    run = False
     exit_code = SIGNAL_EXIT_CODE_OFFSET + signum
 
 
@@ -149,7 +149,7 @@ def main_loop(config):
         count=config.WORKER_POOL_SIZE, sleep=config.SLEEP
     ))
 
-    while run_application:
+    while run:
         free_workers_count = worker_pool.free_count()
         logger.debug('Pool has {count} free workers.'.format(count=free_workers_count))
 
@@ -217,7 +217,7 @@ def main(argv):
 
     install_signal_handlers()
 
-    while run_application:
+    while run:
         try:
             main_loop(config)
 
