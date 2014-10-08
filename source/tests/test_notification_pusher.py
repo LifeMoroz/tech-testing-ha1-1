@@ -2,168 +2,160 @@ import unittest
 import mock
 
 import source.notification_pusher as notification_pusher
+from gevent import queue as gevent_queue
 
+
+def russian_woman_and_horse(*args, **kwargs):
+    notification_pusher.run = False
 
 
 class MainLoopTestCase(unittest.TestCase):
     def setUp(self):
-        notification_pusher.logger = mock.Mock()
-        self.logger = notification_pusher.logger
+        pass
 
-        self.config = mock.Mock()
-        self.config.QUEUE_PORT = 42
-        self.config.QUEUE_HOST = 'host'
-        self.config.QUEUE_SPACE = 0
-        self.config.QUEUE_TUBE = 'tube'
-        self.config.QUEUE_TAKE_TIMEOUT = 0
-        self.config.WORKER_POOL_SIZE = 0
-        self.config.SLEEP = 1
+    def tearDown(self):
+        pass
 
+    def _config(self):
+        config = mock.Mock()
+        config.QUEUE_PORT = 42
+        config.QUEUE_HOST = 'host'
+        config.QUEUE_SPACE = 0
+        config.QUEUE_TUBE = 'tube'
+        config.QUEUE_TAKE_TIMEOUT = 0
+        config.WORKER_POOL_SIZE = 0
+        config.SLEEP = 1
+        return config
 
     @mock.patch('source.notification_pusher.tarantool_queue.Queue')
     @mock.patch('source.notification_pusher.Pool')
     @mock.patch('source.notification_pusher.gevent_queue.Queue')
     def test_main_loop_stopped(self, m_gevent_queue, m_pool, m_queue):
-        notification_pusher.run_application = False
-
-        notification_pusher.main_loop(self.config)
+        notification_pusher.run = False
+        notification_pusher.logger = mock.Mock()
+        config = self._config()
+        notification_pusher.main_loop(config)
 
         m_queue.assert_called_once()
-        m_pool.assert_called_once_with(self.config.WORKER_POOL_SIZE)
+        m_pool.assert_called_once_with(config.WORKER_POOL_SIZE)
         m_gevent_queue.assert_called_once()
-        self.logger.info.assert_called_with('Stop application loop.')
+        notification_pusher.logger.info.assert_called_with('Stop application loop.')
 
 
+    @mock.patch('source.notification_pusher.gevent_queue.Queue', mock.Mock())
     @mock.patch('source.lib.utils.tarantool_queue.Queue')
     @mock.patch('source.notification_pusher.Pool')
-    @mock.patch('source.notification_pusher.gevent_queue.Queue')
-    def test_main_loop_run(self, m_gevent_queue, m_pool, m_queue):
-        notification_pusher.run_application = True
-        free_workers_count = 5
+    def test_main_loop_run(self, m_pool, m_queue):
+        notification_pusher.run = True
+        workers_count = 5
 
-        m_pool().free_count = mock.Mock(return_value=free_workers_count)
-
-        class WorkerTask:
-            def __init__(self, task_id):
-                self.task_id = task_id
+        m_pool().free_count = mock.Mock(return_value=workers_count)
 
         m_queue().tube = mock.Mock()
-        m_queue().tube.take = mock.Mock(return_value=WorkerTask(task_id=42))
+        m_queue().tube.take = mock.Mock(return_value=type('', (), {'task_id': 42}))
 
-        def stop_application(*args, **kwargs):
-            notification_pusher.run_application = False
+        with mock.patch('source.notification_pusher.sleep', mock.Mock(side_effect=russian_woman_and_horse)), \
+                mock.patch('source.notification_pusher.done_with_processed_tasks', mock.Mock()):
+            notification_pusher.main_loop(self._config())
 
-        with mock.patch('source.notification_pusher.sleep', mock.Mock(side_effect=stop_application)):
-            with mock.patch('source.notification_pusher.done_with_processed_tasks', mock.Mock()):
-                notification_pusher.main_loop(self.config)
-
-        self.assertEquals(m_queue().tube().take.call_count, free_workers_count)
-        self.assertEquals(m_pool().add.call_count, free_workers_count)
+        self.assertEquals(m_queue().tube().take.call_count, workers_count)
+        self.assertEquals(m_pool().add.call_count, workers_count)
 
 
 class StopHandlerTestCase(unittest.TestCase):
-    def setUp(self):
-        self.offset = 24
-
+    @classmethod
+    def setUpClass(cls):
         notification_pusher.logger = mock.Mock()
-        notification_pusher.SIGNAL_EXIT_CODE_OFFSET = self.offset
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     @mock.patch('source.notification_pusher.current_thread', mock.Mock())
     def test_stop_handler(self):
         signum = 42
-
         notification_pusher.stop_handler(signum)
-
         self.assertEquals(
             notification_pusher.exit_code,
-            self.offset + signum
+            notification_pusher.SIGNAL_EXIT_CODE_OFFSET + signum
         )
 
 
-class DoneWithProcessedTasks(unittest.TestCase):
-    def setUp(self):
+class DoneWithProcessedTasksTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
         notification_pusher.logger = mock.Mock()
 
+    def setUp(self):
+        pass
 
-    def test_task_successed(self):
+    def tearDown(self):
+        pass
+
+    def _m_task_queue(self, m_get_nowait):
+        m_task_queue = mock.Mock()
+        m_task_queue.qsize = mock.Mock(return_value=1)
+        m_task_queue.get_nowait = m_get_nowait
+        return m_task_queue
+
+    def test_done_with_processed_tasks_successed(self):
         m_task = mock.Mock()
         m_task.task_method = mock.Mock()
 
-        m_task_queue = mock.Mock()
-        m_task_queue.qsize = mock.Mock(return_value=1)
-        m_task_queue.get_nowait = mock.Mock(
-            return_value=(m_task, 'task_method')
-        )
-
-        notification_pusher.done_with_processed_tasks(m_task_queue)
+        notification_pusher.done_with_processed_tasks(self._m_task_queue(mock.Mock(return_value=(m_task, 'task_method'))))
 
         m_task.task.assert_called_once()
 
-    def test_task_db_error(self):
+    def test_done_with_processed_tasks_db_error(self):
         import tarantool
 
         m_task = mock.Mock()
         m_task.task_method = mock.Mock(side_effect=tarantool.DatabaseError())
 
-        m_task_queue = mock.Mock()
-        m_task_queue.qsize = mock.Mock(return_value=1)
-        m_task_queue.get_nowait = mock.Mock(
-            return_value=(m_task, 'task_method')
-        )
-
         try:
-            notification_pusher.done_with_processed_tasks(m_task_queue)
+            notification_pusher.done_with_processed_tasks(self._m_task_queue(mock.Mock(return_value=(m_task,
+                                                                                                     'task_method'))))
         except tarantool.DatabaseError:
-            self.fail()
+            self.fail("DatabaseError exception must be caught")
 
-    def test_queue_is_empty(self):
-        m_task_queue = mock.Mock()
-        m_task_queue.qsize = mock.Mock(return_value=1)
-        m_task_queue.get_nowait = mock.Mock(
-            side_effect=[notification_pusher.gevent_queue.Empty()]
-        )
+    def test_done_with_processed_tasks_queue_is_empty(self):
+        m_task_queue = self._m_task_queue(mock.Mock(side_effect=notification_pusher.gevent_queue.Empty))
 
         try:
             notification_pusher.done_with_processed_tasks(m_task_queue)
         except gevent_queue.Empty:
-            self.fail()
+            self.fail("gevent_queue.Empty exception must be caught")
 
 
-class NotificationWorkeCaseTest(unittest.TestCase):
+class NotificationWorkerCaseTest(unittest.TestCase):
     def setUp(self):
         notification_pusher.logger = mock.Mock()
-
-        class WorkerTask():
-            def __init__(self):
-                self.data = {
-                    'callback_url': 'url'
-                }
-                self.task_id = 42
-
-        self.worker_task = WorkerTask()
+        self.worker_task = type('', (), {
+            'data': {'callback_url': 'url'},
+            'task_id': 42,
+        })
+        self.m_task_queue = mock.Mock()
 
     @mock.patch('source.notification_pusher.current_thread', mock.Mock())
     @mock.patch('source.notification_pusher.requests', mock.Mock())
-    def test_success(self):
-        m_task_queue = mock.Mock()
-
+    def test_notification_worker_success(self):
         notification_pusher.notification_worker(
-            self.worker_task, m_task_queue
+            self.worker_task, self.m_task_queue
         )
 
-        m_task_queue.put.assert_called_once_with((self.worker_task, 'ack'))
+        self.m_task_queue.put.assert_called_once_with((self.worker_task, 'ack'))
 
     @mock.patch('source.notification_pusher.current_thread', mock.Mock())
     @mock.patch('source.notification_pusher.requests.post',
                 mock.Mock(side_effect=[notification_pusher.requests.RequestException()]))
-    def test_request_exception(self):
-        m_task_queue = mock.Mock()
-
+    def test_notification_worker_request_exception(self):
         notification_pusher.notification_worker(
-            self.worker_task, m_task_queue
+            self.worker_task, self.m_task_queue
         )
 
-        m_task_queue.put.assert_called_once_with((self.worker_task, 'bury'))
+        self.m_task_queue.put.assert_called_once_with((self.worker_task, 'bury'))
 
 
 class InstallSignalHandlersTestCase(unittest.TestCase):
@@ -183,24 +175,23 @@ class InstallSignalHandlersTestCase(unittest.TestCase):
         for s in signals:
             signal_set[s] = False
 
-        for c in m_gevent.method_calls:
-            if (c[0] == 'signal' and c[1][0] in signals):
-                signal_set[c[1][0]] = True
+        for call in m_gevent.method_calls:
+            if call[0] == 'signal' and call[1][0] in signals:
+                signal_set[call[1][0]] = True
 
-        # TODO: lambda: [if ]
-        def signal_is_set(signal_set_list):
-            if False in signal_set_list.values():
-                return False
-            return True
-
-        self.assertTrue(signal_is_set(signal_set))
+        self.assertTrue(not False in signal_set.values())
 
 
 class MainTestCase(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         notification_pusher.logger = mock.Mock()
-        self.logger = notification_pusher.logger
 
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     def _test_run(self, daemon, pidfile, config):
         args = type('', (), {
@@ -223,7 +214,7 @@ class MainTestCase(unittest.TestCase):
         pidfile = 'pidfile'
         exit_code = 42
 
-        notification_pusher.run_application = False
+        notification_pusher.run = False
         notification_pusher.exit_code = exit_code
 
         with mock.patch('source.notification_pusher.daemonize', mock.Mock()) as m_daemon, \
@@ -233,28 +224,22 @@ class MainTestCase(unittest.TestCase):
         m_daemon.assert_called_once()
         m_create.assert_called_once_with(pidfile)  # ZAEBALO
         #m_create.assert_called_once()
-        self.logger.info.assert_called_with('Stop application loop in main.')
+        notification_pusher.logger.info.assert_called_with('Stop application loop in main.')
         self.assertEqual(exit_code_was, exit_code)
 
     def test_run(self):
-        def stop_application(*args, **kwargs):
-            notification_pusher.run_application = False
-
         with mock.patch('source.notification_pusher.create_pidfile', mock.Mock()), \
                 mock.patch('source.notification_pusher.daemonize', mock.Mock()), \
-                mock.patch('source.notification_pusher.main_loop', mock.Mock(side_effect=stop_application)) as m_main_loop:
+                mock.patch('source.notification_pusher.main_loop', mock.Mock(side_effect=russian_woman_and_horse)) as m_main_loop:
             self._test_run(False, None, None)
 
         m_main_loop.assert_called_once()
 
     def test_run_sleep(self):
-        def stop_application(*args, **kwargs):
-            notification_pusher.run_application = False
-
         with mock.patch('source.notification_pusher.create_pidfile', mock.Mock()), \
-             mock.patch('source.notification_pusher.daemonize', mock.Mock()), \
-                mock.patch('source.notification_pusher.main_loop', mock.Mock(side_effect=Exception())) as m_main_loop, \
-                mock.patch('source.notification_pusher.sleep', mock.Mock(side_effect=stop_application)) as m_sleep:
+                mock.patch('source.notification_pusher.daemonize', mock.Mock()), \
+                mock.patch('source.notification_pusher.main_loop', mock.Mock(side_effect=Exception)) as m_main_loop, \
+                mock.patch('source.notification_pusher.sleep', mock.Mock(side_effect=russian_woman_and_horse)) as m_sleep:
             self._test_run(True, 'pidfile', 'config')
 
         m_main_loop.assert_called_once()
