@@ -112,6 +112,6 @@ class RedirectCheckerTestCase(unittest.TestCase):
                 mock.patch('source.redirect_checker.sleep', mock_sleep):
             redirect_checker.main_loop(config)
         self.assertEqual(mock_spawn_workers.call_count, 0)
-        test_active_children.terminate.assert_called_once()
+        self.assertEqual(test_active_children.terminate.call_count, 1, "Expected only one call")
         mock_sleep.assert_called_once_with(config.SLEEP)
         redirect_checker.run = True

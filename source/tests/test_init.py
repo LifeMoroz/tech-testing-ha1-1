@@ -104,10 +104,10 @@ class TestInit(unittest.TestCase):
         """
         my_mock = mock.MagicMock()
         with mock.patch('source.lib.urlparse', mock.Mock(return_value=[my_mock] * 6)), \
-             mock.patch('source.lib.logger', mock.MagicMock()) as logger:
+                mock.patch('source.lib.logger', mock.MagicMock()) as logger:
             prepare_url('url')
-            my_mock.encode.assert_called_once()
-            assert not logger.error.called
+            self.assertEqual(my_mock.encode.call_count, 1, "Ожидался одиночный вызов")
+            self.assertFalse(logger.error.called)
 
     def test_prepare_url_with_exception(self):
         """

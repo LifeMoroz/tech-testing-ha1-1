@@ -27,7 +27,7 @@ class MainLoopTestCase(unittest.TestCase):
         config.SLEEP = 1
         return config
 
-    @mock.patch('source.notification_pusher.tarantool_queue.Queue')
+    @mock.patch('source.lib.utils.tarantool_queue.Queue')
     @mock.patch('source.notification_pusher.Pool')
     @mock.patch('source.notification_pusher.gevent_queue.Queue')
     def test_main_loop_stopped(self, m_gevent_queue, m_pool, m_queue):
@@ -36,9 +36,9 @@ class MainLoopTestCase(unittest.TestCase):
         config = self._config()
         notification_pusher.main_loop(config)
 
-        m_queue.assert_called_once()
+        self.assertEqual(m_queue.call_count, 1, "Expected only one call")
         m_pool.assert_called_once_with(config.WORKER_POOL_SIZE)
-        m_gevent_queue.assert_called_once()
+        self.assertEqual(m_gevent_queue.call_count, 1, "Expected only one call")
         notification_pusher.logger.info.assert_called_with('Stop application loop.')
 
 
@@ -106,7 +106,7 @@ class DoneWithProcessedTasksTestCase(unittest.TestCase):
 
         notification_pusher.done_with_processed_tasks(self._m_task_queue(mock.Mock(return_value=(m_task, 'task_method'))))
 
-        m_task.task.assert_called_once()
+        self.assertEqual(m_task.task_method.call_count, 1, "Expected only one call")
 
     def test_done_with_processed_tasks_db_error(self):
         import tarantool
@@ -171,15 +171,8 @@ class InstallSignalHandlersTestCase(unittest.TestCase):
 
         signals = [signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT]
 
-        signal_set = {}
-        for s in signals:
-            signal_set[s] = False
-
         for call in m_gevent.method_calls:
-            if call[0] == 'signal' and call[1][0] in signals:
-                signal_set[call[1][0]] = True
-
-        self.assertTrue(not False in signal_set.values())
+            self.assertTrue(call[0] == 'signal' and call[1][0] in signals)
 
 
 class MainTestCase(unittest.TestCase):
@@ -221,26 +214,26 @@ class MainTestCase(unittest.TestCase):
                 mock.patch('source.notification_pusher.create_pidfile', mock.Mock()) as m_create:
             exit_code_was = self._test_run(True, pidfile, 'config')
 
-        m_daemon.assert_called_once()
-        m_create.assert_called_once_with(pidfile)  # ZAEBALO
-        #m_create.assert_called_once()
+        self.assertEqual(m_daemon.call_count, 1, "Expected only one call")
+        m_create.assert_called_once_with(pidfile)
         notification_pusher.logger.info.assert_called_with('Stop application loop in main.')
         self.assertEqual(exit_code_was, exit_code)
 
     def test_run(self):
+        notification_pusher.run = True
         with mock.patch('source.notification_pusher.create_pidfile', mock.Mock()), \
                 mock.patch('source.notification_pusher.daemonize', mock.Mock()), \
                 mock.patch('source.notification_pusher.main_loop', mock.Mock(side_effect=russian_woman_and_horse)) as m_main_loop:
             self._test_run(False, None, None)
-
-        m_main_loop.assert_called_once()
+        self.assertEqual(m_main_loop.call_count, 1, "Expected only one call")
 
     def test_run_sleep(self):
+        notification_pusher.run = True
         with mock.patch('source.notification_pusher.create_pidfile', mock.Mock()), \
                 mock.patch('source.notification_pusher.daemonize', mock.Mock()), \
                 mock.patch('source.notification_pusher.main_loop', mock.Mock(side_effect=Exception)) as m_main_loop, \
                 mock.patch('source.notification_pusher.sleep', mock.Mock(side_effect=russian_woman_and_horse)) as m_sleep:
             self._test_run(True, 'pidfile', 'config')
 
-        m_main_loop.assert_called_once()
-        m_sleep.assert_called_once()
+        self.assertEqual(m_main_loop.call_count, 1, "Expected only one call")
+        self.assertEqual(m_sleep.call_count, 1, "Expected only one call")

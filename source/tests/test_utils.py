@@ -39,7 +39,7 @@ class DaemonizeTestCase(unittest.TestCase):
         second try_pid returns > 0
         """
         mock_os_exit = self._daemonize(m_exit=Mock(side_effect=None),  m_fork=Mock(side_effect=[0, 42]))
-        mock_os_exit.assert_called_once(0)
+        mock_os_exit.assert_called_once_with(0)
 
     def test_daemonize_child_with_exception(self):
         """
